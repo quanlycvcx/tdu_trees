@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ thống Quản lý Cây xanh Thông minh v5.3 - Mobile Stable</title>
+    <title>Hệ thống Quản lý Cây xanh Thông minh v5.4 - Field Champion</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -52,6 +52,11 @@
         .upload-item input[type="file"] { display: none; }
         .preview-img { width: 100%; height: 75px; object-fit: cover; border-radius: 4px; display: none; margin-top: 6px; border: 1px solid #e2e8f0; }
         
+        /* Chú giải trạng thái bản đồ */
+        .map-legend { background: white; padding: 8px 12px; font-size: 11px; font-weight: bold; border-radius: 4px; box-shadow: 0 1px 5px rgba(0,0,0,0.2); display: flex; gap: 10px; align-items: center; }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        
         .status-msg { margin-top: 10px; font-size: 12px; text-align: center; font-weight: bold; padding: 8px; border-radius: 4px; display: none; }
         .offline-badge { background: #ff5722; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
         .queue-badge { background: #ff9800; color: white; padding: 5px; text-align: center; font-size: 11px; font-weight: bold; display: none; cursor: pointer; }
@@ -69,7 +74,7 @@
 <body>
 
     <header>
-        <h1>HỆ THỐNG ĐỊNH VỊ CÂY XANH THỰC ĐỊA v5.3</h1>
+        <h1>HỆ THỐNG ĐỊNH VỊ CÂY XANH THỰC ĐỊA v5.4</h1>
     </header>
 
     <div id="queue-alert" class="queue-badge" onclick="syncOfflineQueue()">
@@ -175,12 +180,34 @@
         let map, markersLayer, allTrees = [], selectedTree = null, selectedLatLng = null;
         let userMarker = null, userAccuracyCircle = null, currentDeviceLatLng = null;
 
+        // Custom Green Marker để hiển thị cây đã thu thập dữ liệu tọa độ
+        const greenIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.1/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
         window.addEventListener('DOMContentLoaded', () => {
             map = L.map('map').setView([10.762622, 106.660172], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(map);
             markersLayer = L.layerGroup().addTo(map);
+
+            // Thêm Chú giải trạng thái cây lên góc bản đồ
+            const legend = L.control({ position: 'topright' });
+            legend.onAdd = function() {
+                let div = L.DomUtil.create('div', 'map-legend');
+                div.innerHTML = `
+                    <div class="legend-item"><span class="dot" style="background:#2e7d32;"></span> Đã thu thập vị trí</div>
+                    <div class="legend-item"><span class="dot" style="background:#007aff;"></span> Vị trí GPS của bạn</div>
+                `;
+                return div;
+            };
+            legend.addTo(map);
 
             map.on('click', (e) => {
                 if (!selectedTree) { 
@@ -215,26 +242,16 @@
             document.getElementById('app-sidebar').classList.toggle('collapsed');
         }
 
-        // Tối ưu hóa fetch dữ liệu trên Mobile để tránh lỗi chặn kết nối kết hợp kết nối Cache
         function fetchCSVData() {
-            // Thêm tham số chống lưu cache trình duyệt cũ trên di động cache-bust `&_=`
             const finalUrl = CSV_URL + '&_=' + new Date().getTime();
-
             fetch(finalUrl, { method: 'GET', credentials: 'omit' })
                 .then(res => {
                     if(!res.ok) throw new Error("Mạng di động chặn tải file dữ liệu.");
                     return res.text();
                 })
-                .then(text => {
-                    processFetchedData(text);
-                })
+                .then(text => processFetchedData(text))
                 .catch(err => {
-                    console.warn("Thử nghiệm phương thức tải phụ thông qua Fetch dự phòng trên thiết bị di động...");
-                    // Phương án phụ: Vẫn thử tải bình thường phòng trường hợp cấu hình mạng chập chờn
-                    fetch(CSV_URL)
-                        .then(r => r.text())
-                        .then(t => processFetchedData(t))
-                        .catch(e => useLocalStorageCache());
+                    fetch(CSV_URL).then(r => r.text()).then(t => processFetchedData(t)).catch(e => useLocalStorageCache());
                 });
         }
 
@@ -255,13 +272,11 @@
                 allTrees = parseCSV(cachedText);
                 buildInitialPhuongFilter();
                 renderMarkers(allTrees);
-                console.log("Mobile Offline Mode: Đã khôi phục dữ liệu gốc từ bộ nhớ thiết bị di động.");
             } else {
-                alert('Không thể kết nối với dữ liệu gốc Google Sheet. Vui lòng kiểm tra lại cấu hình mạng 3G/4G của thiết bị!');
+                alert('Không thể kết nối với dữ liệu gốc Google Sheet.');
             }
         }
 
-        // Sửa lỗi ngắt chuỗi dòng giúp xử lý mảng an toàn tuyệt đối trên iOS và Android
         function parseCSV(text) {
             let lines = text.split(/\r\n|\n|\r/), result = [];
             for (let i = 1; i < lines.length; i++) {
@@ -304,11 +319,7 @@
                 dSel.innerHTML = '<option value="">-- Chọn Tuyến Đường --</option>';
                 lSel.innerHTML = '<option value="">-- Trước hết hãy chọn Đường --</option>';
                 sSel.innerHTML = '<option value="">-- Trước hết hãy chọn Loài cây --</option>';
-                
-                dSel.disabled = true;
-                lSel.disabled = true;
-                sSel.disabled = true;
-                btnSearch.disabled = true;
+                dSel.disabled = true; lSel.disabled = true; sSel.disabled = true; btnSearch.disabled = true;
 
                 if (pSel.value) {
                     dSel.disabled = false;
@@ -320,14 +331,11 @@
             dSel.addEventListener('change', () => {
                 lSel.innerHTML = '<option value="">-- Chọn Loài Cây --</option>';
                 sSel.innerHTML = '<option value="">-- Trước hết hãy chọn Loài cây --</option>';
-                
-                lSel.disabled = true;
-                sSel.disabled = true;
+                lSel.disabled = true; sSel.disabled = true;
 
                 if (dSel.value) {
                     btnSearch.disabled = false;
                     lSel.disabled = false;
-                    
                     let species = [...new Set(allTrees.filter(t => t.phuong === pSel.value && t.duong === dSel.value).map(t => t.loaicay).filter(Boolean))].sort();
                     species.forEach(l => lSel.add(new Option(l, l)));
                 } else {
@@ -342,9 +350,11 @@
                 if (lSel.value) {
                     sSel.disabled = false;
                     let finalTreeNumbers = allTrees.filter(t => t.phuong === pSel.value && t.duong === dSel.value && t.loaicay === lSel.value);
-                    
                     finalTreeNumbers.sort((a, b) => String(a.socay).localeCompare(String(b.socay), undefined, {numeric: true, sensitivity: 'base'}));
-                    finalTreeNumbers.forEach(t => sSel.add(new Option(`Số: ${t.socay}`, t.stt)));
+                    finalTreeNumbers.forEach(t => {
+                        let statusText = (t.lat && t.lng) ? " (Đã có vị trí)" : " (Chưa có vị trí)";
+                        sSel.add(new Option(`Số: ${t.socay}${statusText}`, t.stt));
+                    });
                 }
             });
 
@@ -358,56 +368,42 @@
 
         function resetAllFiltersAndInputs() {
             document.getElementById('filter-phuong').value = "";
-            
             const dSel = document.getElementById('filter-duong');
-            dSel.innerHTML = '<option value="">-- Trước hết hãy chọn Phường --</option>';
-            dSel.disabled = true;
-            
+            dSel.innerHTML = '<option value="">-- Trước hết hãy chọn Phường --</option>'; dSel.disabled = true;
             const lSel = document.getElementById('filter-loai');
-            lSel.innerHTML = '<option value="">-- Trước hết hãy chọn Đường --</option>';
-            lSel.disabled = true;
-            
+            lSel.innerHTML = '<option value="">-- Trước hết hãy chọn Đường --</option>'; lSel.disabled = true;
             const sSel = document.getElementById('filter-socay');
-            sSel.innerHTML = '<option value="">-- Trước hết hãy chọn Loài cây --</option>';
-            sSel.disabled = true;
+            sSel.innerHTML = '<option value="">-- Trước hết hãy chọn Loài cây --</option>'; sSel.disabled = true;
             
             document.getElementById('btn-trigger-search').disabled = true;
-            
-            selectedTree = null;
-            selectedLatLng = null;
-            document.getElementById('tree-info-container').innerHTML = `
-                <p style="color:#777; text-align:center;">Vui lòng chọn cây từ bộ lọc hoặc click marker trên bản đồ.</p>`;
-            
+            selectedTree = null; selectedLatLng = null;
+            document.getElementById('tree-info-container').innerHTML = `<p style="color:#777; text-align:center;">Vui lòng chọn cây từ bộ lọc hoặc click marker trên bản đồ.</p>`;
             document.getElementById('update-section').style.display = 'none';
             resetUploadForm();
-            
             renderMarkers(allTrees);
             document.getElementById('gps-status').innerText = '';
-            
-            if (userMarker) {
-                map.flyTo(userMarker.getLatLng(), 16);
-            } else {
-                map.setView([10.762622, 106.660172], 13);
-            }
+            if (userMarker) map.flyTo(userMarker.getLatLng(), 16);
+            else map.setView([10.762622, 106.660172], 13);
         }
 
         function applyFiltersAndFocus() {
             const p = document.getElementById('filter-phuong').value;
             const d = document.getElementById('filter-duong').value;
-            
             if(!p || !d) return;
 
             let filtered = allTrees.filter(t => t.phuong === p && t.duong === d);
             renderMarkers(filtered);
         }
 
+        // TÍNH NĂNG MỚI: Chỉ hiển thị marker của cây ĐÃ THU THẬP dữ liệu lên bản đồ
         function renderMarkers(trees) {
             markersLayer.clearLayers();
             let bounds = [];
             
             trees.forEach(t => {
+                // Chỉ hiển thị Marker Xanh Lá nếu cây có dữ liệu coordX, coordY hợp lệ
                 if (t.lat && t.lng) {
-                    let m = L.marker([t.lat, t.lng]).bindPopup(`<b>${t.loaicay}</b><br>Số hiệu: ${t.socay}<br>${t.duong}, ${t.phuong}`);
+                    let m = L.marker([t.lat, t.lng], { icon: greenIcon }).bindPopup(`<b>${t.loaicay}</b><br>Số hiệu: ${t.socay}<br>${t.duong}, ${t.phuong}<br><span style="color:green;font-weight:bold;">✓ Đã thu thập vị trí</span>`);
                     m.on('click', () => selectTree(t));
                     markersLayer.addLayer(m);
                     bounds.push([t.lat, t.lng]);
@@ -420,10 +416,7 @@
         }
 
         function locateUserAndAutoFill() {
-            if (!navigator.geolocation) { 
-                alert('Thiết bị không hỗ trợ định vị GPS toàn cầu.'); 
-                return; 
-            }
+            if (!navigator.geolocation) { alert('Thiết bị không hỗ trợ định vị GPS.'); return; }
             document.getElementById('gps-status').innerText = '⏳ Đang đồng bộ tọa độ vệ tinh thực địa...';
 
             navigator.geolocation.getCurrentPosition((pos) => {
@@ -439,10 +432,6 @@
                 
                 map.flyTo([uLat, uLng], 18);
 
-                if (accuracy > 25) {
-                    document.getElementById('gps-status').innerHTML = `⚠️ GPS sai số (${accuracy.toFixed(0)}m). Nên đứng góc thoáng.`;
-                }
-
                 let minDistance = Infinity, closestTree = null;
                 allTrees.forEach(tree => {
                     if (tree.lat && tree.lng) {
@@ -453,38 +442,30 @@
 
                 if (closestTree && minDistance < 0.01) {
                     document.getElementById('gps-status').innerHTML = `🎯 Khớp tuyến: <b>${closestTree.duong}</b> (Sai số: ${accuracy.toFixed(0)}m)`;
-                    
-                    const pSel = document.getElementById('filter-phuong');
-                    pSel.value = closestTree.phuong;
-                    pSel.dispatchEvent(new Event('change'));
-
-                    const dSel = document.getElementById('filter-duong');
-                    dSel.value = closestTree.duong;
-                    dSel.dispatchEvent(new Event('change'));
-                    
+                    const pSel = document.getElementById('filter-phuong'); pSel.value = closestTree.phuong; pSel.dispatchEvent(new Event('change'));
+                    const dSel = document.getElementById('filter-duong'); dSel.value = closestTree.duong; dSel.dispatchEvent(new Event('change'));
                     applyFiltersAndFocus();
                 } else {
-                    document.getElementById('gps-status').innerText = `Đã lấy GPS (${accuracy.toFixed(0)}m). Không thấy tuyến cây mẫu kề cận.`;
+                    document.getElementById('gps-status').innerText = `Đã lấy GPS (${accuracy.toFixed(0)}m). Không thấy cây mẫu kề cận.`;
                 }
             }, () => {
-                alert('Lỗi lấy GPS. Hãy bật tính năng Vị trí trong cài đặt điện thoại.');
+                alert('Lỗi lấy GPS. Hãy bật tính năng Vị trí.');
                 document.getElementById('gps-status').innerText = '❌ Lỗi kết nối GPS.';
             }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
         }
 
         function snapToCurrentGPS() {
-            if(!currentDeviceLatLng) {
-                alert("Vui lòng click nút 'TÌM TUYẾN GẦN ĐÂY NHẤT (GPS)' ở đầu trang để cập nhật tọa độ thiết bị trước.");
-                return;
-            }
+            if(!currentDeviceLatLng) { alert("Vui lòng click nút 'TÌM TUYẾN GẦN ĐÂY NHẤT (GPS)' ở đầu trang trước."); return; }
             updateTargetLocation(currentDeviceLatLng);
             map.panTo(currentDeviceLatLng);
         }
 
         function selectTree(tree) {
             selectedTree = tree;
+            let statusText = (tree.lat && tree.lng) ? '<span style="color:green;font-weight:bold;">Đã thu thập ✓</span>' : '<span style="color:red;font-weight:bold;">Chưa có vị trí ✗</span>';
             document.getElementById('tree-info-container').innerHTML = `
                 <table>
+                    <tr><td><b>Trạng thái thực địa:</b></td><td>${statusText}</td></tr>
                     <tr><td><b>Mã dòng (STT):</b></td><td>${tree.stt}</td></tr>
                     <tr><td><b>Phường/Xã:</b></td><td>${tree.phuong}</td></tr>
                     <tr><td><b>Tên đường:</b></td><td>${tree.duong}</td></tr>
@@ -501,20 +482,15 @@
                 updateTargetLocation(L.latLng(tree.lat, tree.lng));
                 map.panTo([tree.lat, tree.lng]);
             } else {
-                document.getElementById('geo-lat').value = '';
-                document.getElementById('geo-lng').value = '';
+                document.getElementById('geo-lat').value = ''; document.getElementById('geo-lng').value = '';
             }
-            
-            if(window.innerWidth <= 768) {
-                setTimeout(() => toggleSidebar(), 600);
-            }
+            if(window.innerWidth <= 768) { setTimeout(() => toggleSidebar(), 600); }
         }
 
         function updateTargetLocation(latlng) {
             selectedLatLng = latlng;
             document.getElementById('geo-lat').value = latlng.lat.toFixed(6);
             document.getElementById('geo-lng').value = latlng.lng.toFixed(6);
-            
             if(document.getElementById('lbl-lat')) {
                 document.getElementById('lbl-lat').innerText = latlng.lat.toFixed(6);
                 document.getElementById('lbl-lng').innerText = latlng.lng.toFixed(6);
@@ -525,55 +501,68 @@
             let prev = document.getElementById(prevId);
             if (input.files && input.files[0]) {
                 let r = new FileReader();
-                r.onload = e => { 
-                    prev.src = e.target.result; 
-                    prev.style.display = 'block'; 
-                };
+                r.onload = e => { prev.src = e.target.result; prev.style.display = 'block'; };
                 r.readAsDataURL(input.files[0]);
             }
         }
 
         function resetUploadForm() {
-            document.getElementById('img1').value = ''; 
-            document.getElementById('img2').value = '';
-            document.getElementById('prev1').style.display = 'none'; 
-            document.getElementById('prev2').style.display = 'none';
-            
-            const log = document.getElementById('status-log');
-            log.innerText = '';
-            log.style.display = 'none';
+            document.getElementById('img1').value = ''; document.getElementById('img2').value = '';
+            document.getElementById('prev1').style.display = 'none'; document.getElementById('prev2').style.display = 'none';
+            const log = document.getElementById('status-log'); log.innerText = ''; log.style.display = 'none';
         }
 
-        function fileToBase64(file) {
+        // TÌM NĂNG MỚI: Tự động nén chất lượng ảnh trực tiếp trên mobile trước khi xuất Base64 để chống nghẽn mạng 4G
+        function compressAndGetBase64(file) {
             return new Promise((resolve, reject) => {
-                if (!file) resolve("");
-                let r = new FileReader();
-                r.readAsDataURL(file);
-                r.onload = () => resolve(r.result.split(',')[1]);
-                r.onerror = e => reject(e);
+                if (!file) { resolve(""); return; }
+                let reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = function (event) {
+                    let img = new Image();
+                    img.src = event.target.result;
+                    img.onload = function () {
+                        let canvas = document.createElement('canvas');
+                        let max_width = 1000; // Giới hạn kích thước ảnh rộng tối đa 1000px để tối ưu bộ nhớ
+                        let scale = max_width / img.width;
+                        
+                        if (img.width > max_width) {
+                            canvas.width = max_width;
+                            canvas.height = img.height * scale;
+                        } else {
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                        }
+
+                        let ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        
+                        // Xuất ảnh nén với định dạng jpeg chất lượng 70% (Dung lượng giảm còn khoảng 300KB)
+                        let base64String = canvas.toDataURL('image/jpeg', 0.7);
+                        resolve(base64String.split(',')[1]);
+                    };
+                };
+                reader.onerror = error => reject(error);
             });
         }
 
         async function submitDataViaAjax() {
-            if (!selectedTree || !selectedLatLng) { 
-                alert('Vui lòng chọn thông tin cây và lấy tọa độ trước.'); 
-                return; 
-            }
+            if (!selectedTree || !selectedLatLng) { alert('Vui lòng chọn thông tin cây và lấy tọa độ trước.'); return; }
             
             const log = document.getElementById('status-log');
             const btn = document.getElementById('btn-submit');
             
-            log.style.display = 'block';
-            log.style.backgroundColor = '#fff3e0';
-            log.style.color = '#e65100';
-            log.innerText = '⏳ Đang xử lý đóng gói ảnh...';
+            log.style.display = 'block'; log.style.backgroundColor = '#fff3e0'; log.style.color = '#e65100';
+            log.innerText = '⏳ Máy đang tự động nén dung lượng ảnh và đóng gói dữ liệu thực địa...';
             btn.disabled = true;
 
             try {
                 let img1 = document.getElementById('img1').files[0];
                 let img2 = document.getElementById('img2').files[0];
-                let b1 = img1 ? await fileToBase64(img1) : "";
-                let b2 = img2 ? await fileToBase64(img2) : "";
+                
+                // Gọi hàm nén ảnh di động
+                let b1 = await compressAndGetBase64(img1);
+                let b2 = await compressAndGetBase64(img2);
 
                 let payload = {
                     stt: String(selectedTree.stt),
@@ -583,33 +572,29 @@
                     socay: selectedTree.socay,
                     lat: selectedLatLng.lat.toFixed(6),
                     lng: selectedLatLng.lng.toFixed(6),
-                    image1_name: img1 ? img1.name : "",
+                    image1_name: img1 ? "nen_anh1.jpg" : "",
                     image1_data: b1,
-                    image2_name: img2 ? img2.name : "",
+                    image2_name: img2 ? "nen_anh2.jpg" : "",
                     image2_data: b2
                 };
 
                 if (!navigator.onLine) {
                     saveToOfflineQueue(payload);
-                    log.style.backgroundColor = '#ffcc80';
-                    log.style.color = '#b56d00';
-                    log.innerHTML = '📂 MẤT MẠNG! Đã lưu vào hàng chờ ngoại tuyến. Sẽ tự đồng bộ khi thiết bị có 4G.';
-                    btn.disabled = false;
-                    return;
+                    log.style.backgroundColor = '#ffcc80'; log.style.color = '#b56d00';
+                    log.innerHTML = '📂 MẤT MẠNG! Dữ liệu nén đã lưu vào hàng chờ ngoại tuyến. Sẽ tự đồng bộ khi có 4G.';
+                    btn.disabled = false; return;
                 }
 
                 sendData(payload, log, btn);
 
             } catch (e) { 
-                log.style.backgroundColor = '#ffebee';
-                log.style.color = '#d32f2f';
-                log.innerText = '❌ Lỗi mã hóa chuỗi hình ảnh.'; 
-                btn.disabled = false;
+                log.style.backgroundColor = '#ffebee'; log.style.color = '#d32f2f';
+                log.innerText = '❌ Lỗi mã hóa xử lý hình ảnh thực địa.'; btn.disabled = false;
             }
         }
 
         function sendData(payload, logElement, buttonElement) {
-            logElement.innerText = '🚀 Đang đồng bộ dữ liệu thực địa lên Google Sheets...';
+            logElement.innerText = '🚀 Đang đẩy gói dữ liệu gọn nhẹ lên Google Sheets...';
             
             fetch(WEB_APP_URL, {
                 method: 'POST',
@@ -618,8 +603,7 @@
                 body: JSON.stringify(payload)
             })
             .then(() => {
-                logElement.style.backgroundColor = '#e8f5e9';
-                logElement.style.color = '#2e7d32';
+                logElement.style.backgroundColor = '#e8f5e9'; logElement.style.color = '#2e7d32';
                 logElement.innerHTML = '🎉 CẬP NHẬT THÀNH CÔNG LÊN HỆ THỐNG!';
                 buttonElement.disabled = false;
                 
@@ -630,9 +614,8 @@
             })
             .catch((err) => {
                 saveToOfflineQueue(payload);
-                logElement.style.backgroundColor = '#ffcc80';
-                logElement.style.color = '#b56d00';
-                logElement.innerText = '⚠️ Mạng chập chờn. Đã sao lưu dữ liệu vào hàng chờ ngoại tuyến.';
+                logElement.style.backgroundColor = '#ffcc80'; logElement.style.color = '#b56d00';
+                logElement.innerText = '⚠️ Mạng lỗi. Đã sao lưu dữ liệu vào hàng chờ ngoại tuyến.';
                 buttonElement.disabled = false;
             });
         }
@@ -651,9 +634,7 @@
             if(queue.length > 0) {
                 alertBox.style.display = 'block';
                 alertBox.innerText = `⚠️ Có ${queue.length} cây đã lưu offline. Nhấp vào đây để gửi lên Google Sheet ngay!`;
-            } else {
-                alertBox.style.display = 'none';
-            }
+            } else { alertBox.style.display = 'none'; }
         }
 
         function syncOfflineQueue() {
@@ -671,12 +652,8 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(item)
             }).then(() => {
-                if(queue.length > 0) {
-                    syncOfflineQueue();
-                } else {
-                    alert("Đồng bộ hoàn tất toàn bộ dữ liệu offline thành công!");
-                    fetchCSVData();
-                }
+                if(queue.length > 0) syncOfflineQueue();
+                else { alert("Đồng bộ dữ liệu ngoại tuyến thành công!"); fetchCSVData(); }
             }).catch(err => {
                 queue.unshift(item);
                 localStorage.setItem('offline_tree_queue', JSON.stringify(queue));
