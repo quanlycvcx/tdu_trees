@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Quản lý Cây xanh Thông minh v4.2</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f6f9; color: #333; display: flex; flex-direction: column; height: 100vh; }
+        header { background-color: #1b5e20; color: white; padding: 15px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        header h1 { font-size: 20px; letter-spacing: 0.5px; }
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        .sidebar { width: 380px; background: white; display: flex; flex-direction: column; overflow-y: auto; border-right: 1px solid #e0e0e0; }
+        .map-container { flex: 1; position: relative; }
+        #map { width: 100%; height: 100%; }
+        .section { padding: 18px; border-bottom: 1px solid #eee; }
+        .section-title { font-size: 14px; font-weight: bold; color: #1b5e20; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 13px; margin-bottom: 5px; color: #555; font-weight: 600; }
+        .form-group select, .form-group input { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; outline: none; transition: all 0.2s; }
+        .form-group select:focus, .form-group input:focus { border-color: #1b5e20; box-shadow: 0 0 0 2px rgba(27,94,32,0.1); }
+        .btn { background-color: #2e7d32; color: white; border: none; padding: 12px; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; text-align: center; transition: background 0.2s; }
+        .btn:hover { background-color: #1b5e20; }
+        .btn:disabled { background-color: #a5d6a7; cursor: not-allowed; }
+        .btn-gps { background-color: #0288d1; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-gps:hover { background-color: #01579b; }
+        .tree-details { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; font-size: 13px; }
+        .tree-details table { width: 100%; border-collapse: collapse; }
+        .tree-details td { padding: 6px 0; border-bottom: 1px solid #f1f1f1; vertical-align: top; }
+        .tree-details tr:last-child td { border-bottom: none; }
+        .tree-details td:first-child { font-weight: 600; color: #666; width: 40%; }
+        .image-upload-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .upload-item { border: 2px dashed #cbd5e1; border-radius: 6px; padding: 12px; text-align: center; background: #f8fafc; cursor: pointer; position: relative; display: block; font-size: 13px; font-weight: 500; color: #64748b; }
+        .upload-item:hover { border-color: #2e7d32; background: #f0fdf4; color: #2e7d32; }
+        .upload-item input[type="file"] { display: none; }
+        .preview-img { width: 100%; height: 85px; object-fit: cover; border-radius: 4px; display: none; margin-top: 8px; border: 1px solid #e2e8f0; }
+        .status-msg { margin-top: 10px; font-size: 13px; text-align: center; font-weight: bold; padding: 8px; border-radius: 4px; display: none; }
+        
+        @media(max-width: 768px) {
+            .main-container { flex-direction: column; }
+            .sidebar { width: 100%; height: 50vh; }
+            .map-container { height: 50vh; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>HỆ THỐNG ĐỊNH VỊ CÂY XANH TỰ ĐỘNG NHẬN DIỆN TUYẾN ĐƯỜNG</h1>
+    </header>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="section">
+                <button class="btn btn-gps" onclick="locateUserAndAutoFill()">🎯 TÌM PHƯỜNG & ĐƯỜNG GẦN ĐÂY NHẤT</button>
+                <div id="gps-status" style="font-size: 12px; color: #666; text-align: center; margin-top: 6px; font-weight: 500;"></div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">🔍 BỘ LỌC TÌM KIẾM CÂY XANH</div>
+                <div class="form-group">
+                    <label for="filter-phuong">Phường/Xã</label>
+                    <select id="filter-phuong"><option value="">-- Tất cả Phường --</option></select>
+                </div>
+                <div class="form-group">
+                    <label for="filter-duong">Tên Đường</label>
+                    <select id="filter-duong" disabled><option value="">-- Chọn Đường --</option></select>
+                </div>
+                <div class="form-group">
+                    <label for="filter-loai">Loài Cây</label>
+                    <select id="filter-loai"><option value="">-- Tất cả Loài Cây --</option></select>
+                </div>
+                <div class="form-group">
+                    <label for="filter-socay">Số Hiệu Cây Trong Tuyến</label>
+                    <select id="filter-socay" disabled><option value="">-- Chọn Số Cây --</option></select>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">🌳 THÔNG TIN CÂY ĐANG CHỌN</div>
+                <div id="tree-info-container" class="tree-details">
+                    <p style="color:#777; text-align:center;">Vui lòng chọn cây xanh hoặc dùng GPS định vị.</p>
+                </div>
+            </div>
+
+            <div class="section" id="update-section" style="display:none;">
+                <div class="section-title">📍 CẬP NHẬT TỌA ĐỘ & HÌNH ẢNH</div>
+                
+                <div class="form-group">
+                    <label>coordX (Vĩ độ Lat từ bản đồ)</label>
+                    <input type="text" id="geo-lat" readonly style="background-color: #f1f5f9; color: #334155;">
+                </div>
+                
+                <div class="form-group">
+                    <label>coordY (Kinh độ Lng từ bản đồ)</label>
+                    <input type="text" id="geo-lng" readonly style="background-color: #f1f5f9; color: #334155;">
+                </div>
+
+                <div class="form-group">
+                    <label>Upload Hình Ảnh Cây</label>
+                    <div class="image-upload-box">
+                        <label class="upload-item">
+                            📷 Chọn Ảnh 1
+                            <input type="file" id="img1" accept="image/*" onchange="previewImage(this, 'prev1')">
+                            <img id="prev1" class="preview-img">
+                        </label>
+                        <label class="upload-item">
+                            📷 Chọn Ảnh 2
+                            <input type="file" id="img2" accept="image/*" onchange="previewImage(this, 'prev2')">
+                            <img id="prev2" class="preview-img">
+                        </label>
+                    </div>
+                </div>
+                
+                <button type="button" class="btn" id="btn-submit" onclick="submitDataViaAjax()">LƯU DỮ LIỆU LÊN GOOGLE SHEET</button>
+                <div id="status-log" class="status-msg"></div>
+            </div>
+        </div>
+
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Đồng bộ hóa URL đúng cấu trúc xuất bản CSV của bạn
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQs5Vgwh6HtVFXhGGHS1_rCLQwGLKG2wwHW_B6oMwEs6gYBD76cAWGUhsT27hfsBH6LKhwIIw5ts7c5/pub?gid=1597817292&single=true&output=csv';
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycby5q4tmkJmmfYP1xZQfVWBJWjTUBF0Ezr-Cel-uCypiidakPK-jiLGW6ylUmxPcLE1M7w/exec';
+
+        let map, markersLayer, allTrees = [], selectedTree = null, selectedLatLng = null, userMarker = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // Khởi tạo bản đồ mặc định tại khu vực TP.HCM
+            map = L.map('map').setView([10.762622, 106.660172], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+            markersLayer = L.layerGroup().addTo(map);
+
+            map.on('click', (e) => {
+                if (!selectedTree) { 
+                    alert('Vui lòng chọn một cây từ danh sách bộ lọc hoặc click vào marker trước khi chọn vị trí trên bản đồ!'); 
+                    return; 
+                }
+                updateTargetLocation(e.latlng);
+            });
+
+            fetchCSVData();
+            setupFilterEvents();
+        });
+
+        function fetchCSVData() {
+            fetch(CSV_URL)
+                .then(res => {
+                    if(!res.ok) throw new Error("Không thể tải tệp dữ liệu.");
+                    return res.text();
+                })
+                .then(text => {
+                    allTrees = parseCSV(text);
+                    populateFilters(allTrees);
+                    renderMarkers(allTrees);
+                })
+                .catch(err => alert('Không thể kết nối hoặc đọc dữ liệu từ Google Sheet công khai. Vui lòng kiểm tra lại nút trích xuất công bố.'));
+        }
+
+        function parseCSV(text) {
+            let lines = text.split(/\r?\n/), result = [];
+            for (let i = 1; i < lines.length; i++) {
+                let rowText = lines[i].trim();
+                if (!rowText) continue;
+                
+                // Cắt chuỗi thông minh xử lý dấu phẩy nằm trong ngoặc kép
+                let c = rowText.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                if(c.length < 12) continue; 
+                
+                let rawStt = c[0] ? c[0].replace(/"/g, '').trim() : String(i);
+                
+                result.push({
+                    stt: rawStt,
+                    lat: parseFloat(c[1]) || null,
+                    lng: parseFloat(c[2]) || null,
+                    phuong: c[6] ? c[6].replace(/"/g, '').trim() : '',
+                    duong: c[8] ? c[8].replace(/"/g, '').trim() : '',
+                    loaicay: c[10] ? c[10].replace(/"/g, '').trim() : '',
+                    socay: c[11] ? c[11].replace(/"/g, '').trim() : ''
+                });
+            }
+            return result;
+        }
+
+        function populateFilters(trees) {
+            const phuongs = [...new Set(trees.map(t => t.phuong).filter(Boolean))].sort();
+            const loais = [...new Set(trees.map(t => t.loaicay).filter(Boolean))].sort();
+            
+            const pSel = document.getElementById('filter-phuong');
+            const lSel = document.getElementById('filter-loai');
+            
+            pSel.innerHTML = '<option value="">-- Tất cả Phường --</option>';
+            lSel.innerHTML = '<option value="">-- Tất cả Loài Cây --</option>';
+            
+            phuongs.forEach(p => pSel.add(new Option(p, p)));
+            loais.forEach(l => lSel.add(new Option(l, l)));
+        }
+
+        function setupFilterEvents() {
+            const pSel = document.getElementById('filter-phuong'), dSel = document.getElementById('filter-duong');
+            const lSel = document.getElementById('filter-loai'), sSel = document.getElementById('filter-socay');
+
+            pSel.addEventListener('change', () => {
+                dSel.innerHTML = '<option value="">-- Chọn Đường --</option>';
+                sSel.innerHTML = '<option value="">-- Chọn Số Cây --</option>';
+                sSel.disabled = true;
+                
+                if (pSel.value) {
+                    dSel.disabled = false;
+                    let streets = [...new Set(allTrees.filter(t => t.phuong === pSel.value).map(t => t.duong).filter(Boolean))].sort();
+                    streets.forEach(d => dSel.add(new Option(d, d)));
+                } else { 
+                    dSel.disabled = true; 
+                }
+                applyFilters();
+            });
+
+            dSel.addEventListener('change', () => {
+                sSel.innerHTML = '<option value="">-- Chọn Số Cây --</option>';
+                if (dSel.value) {
+                    sSel.disabled = false;
+                    updateTreeNumberOptions();
+                } else { 
+                    sSel.disabled = true; 
+                }
+                applyFilters();
+            });
+
+            lSel.addEventListener('change', () => {
+                if (pSel.value && dSel.value) {
+                    updateTreeNumberOptions();
+                }
+                applyFilters();
+            });
+
+            sSel.addEventListener('change', () => { 
+                if (sSel.value) {
+                    let target = allTrees.find(t => String(t.stt) === String(sSel.value));
+                    if(target) selectTree(target);
+                } 
+            });
+        }
+
+        function updateTreeNumberOptions() {
+            const pSel = document.getElementById('filter-phuong'), dSel = document.getElementById('filter-duong');
+            const lSel = document.getElementById('filter-loai'), sSel = document.getElementById('filter-socay');
+            
+            sSel.innerHTML = '<option value="">-- Chọn Số Cây --</option>';
+            let filtered = allTrees.filter(t => t.phuong === pSel.value && t.duong === dSel.value);
+            if (lSel.value) filtered = filtered.filter(t => t.loaicay === lSel.value);
+            
+            filtered.forEach(t => sSel.add(new Option(`Số: ${t.socay} (${t.loaicay})`, t.stt)));
+        }
+
+        function applyFilters() {
+            const p = document.getElementById('filter-phuong').value;
+            const d = document.getElementById('filter-duong').value;
+            const l = document.getElementById('filter-loai').value;
+            
+            let filtered = allTrees;
+            if (p) filtered = filtered.filter(t => t.phuong === p);
+            if (d) filtered = filtered.filter(t => t.duong === d);
+            if (l) filtered = filtered.filter(t => t.loaicay === l);
+            
+            renderMarkers(filtered);
+        }
+
+        function renderMarkers(trees) {
+            markersLayer.clearLayers();
+            let bounds = [];
+            
+            trees.forEach(t => {
+                if (t.lat && t.lng) {
+                    let m = L.marker([t.lat, t.lng]).bindPopup(`<b>${t.loaicay}</b><br>Số cây: ${t.socay}<br>${t.duong}, ${t.phuong}`);
+                    m.on('click', () => selectTree(t));
+                    markersLayer.addLayer(m);
+                    bounds.push([t.lat, t.lng]);
+                }
+            });
+            
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { maxZoom: 17, padding: [40, 40] });
+            }
+        }
+
+        function locateUserAndAutoFill() {
+            if (!navigator.geolocation) { 
+                alert('Trình duyệt của bạn không hỗ trợ định vị GPS.'); 
+                return; 
+            }
+            document.getElementById('gps-status').innerText = '⏳ Đang định vị tọa độ GPS của bạn...';
+
+            navigator.geolocation.getCurrentPosition((pos) => {
+                let uLat = pos.coords.latitude, uLng = pos.coords.longitude;
+                
+                if (userMarker) map.removeLayer(userMarker);
+                userMarker = L.circleMarker([uLat, uLng], { 
+                    radius: 9, 
+                    fillColor: '#007aff', 
+                    color: '#fff', 
+                    weight: 3, 
+                    fillOpacity: 0.8 
+                }).addTo(map);
+                
+                map.flyTo([uLat, uLng], 18);
+
+                let minDistance = Infinity, closestTree = null;
+                allTrees.forEach(tree => {
+                    if (tree.lat && tree.lng) {
+                        let d = Math.sqrt(Math.pow(tree.lat - uLat, 2) + Math.pow(tree.lng - uLng, 2));
+                        if (d < minDistance) { minDistance = d; closestTree = tree; }
+                    }
+                });
+
+                // Tăng độ chuẩn xác quét bán kính lân cận tự động
+                if (closestTree && minDistance < 0.01) {
+                    document.getElementById('gps-status').innerHTML = `🎯 Tuyến gần nhất: <b>${closestTree.duong}, ${closestTree.phuong}</b>`;
+                    
+                    const pSel = document.getElementById('filter-phuong');
+                    pSel.value = closestTree.phuong;
+                    pSel.dispatchEvent(new Event('change'));
+
+                    const dSel = document.getElementById('filter-duong');
+                    dSel.value = closestTree.duong;
+                    dSel.dispatchEvent(new Event('change'));
+                } else {
+                    document.getElementById('gps-status').innerText = '🎯 Đã xác định vị trí! Không tìm thấy dữ liệu cây nào trong phạm vi gần.';
+                }
+            }, () => {
+                alert('Lỗi định vị. Vui lòng bật vị trí thiết bị và chạy website dưới giao thức bảo mật HTTPS.');
+                document.getElementById('gps-status').innerText = '❌ Không thể truy cập GPS.';
+            }, { enableHighAccuracy: true, timeout: 8000 });
+        }
+
+        function selectTree(tree) {
+            selectedTree = tree;
+            document.getElementById('tree-info-container').innerHTML = `
+                <table>
+                    <tr><td><b>Mã dòng (STT):</b></td><td>${tree.stt}</td></tr>
+                    <tr><td><b>Phường/Xã:</b></td><td>${tree.phuong}</td></tr>
+                    <tr><td><b>Tên đường:</b></td><td>${tree.duong}</td></tr>
+                    <tr><td><b>Loài cây:</b></td><td>${tree.loaicay}</td></tr>
+                    <tr><td><b>Số cây:</b></td><td>${tree.socay}</td></tr>
+                    <tr><td><b>Vĩ độ X:</b></td><td><span id="lbl-lat" style="color:#0288d1; font-weight:bold;">${tree.lat || 'Chưa cập nhật'}</span></td></tr>
+                    <tr><td><b>Kinh độ Y:</b></td><td><span id="lbl-lng" style="color:#0288d1; font-weight:bold;">${tree.lng || 'Chưa cập nhật'}</span></td></tr>
+                </table>`;
+
+            document.getElementById('update-section').style.display = 'block';
+            resetUploadForm();
+            
+            if (tree.lat && tree.lng) {
+                updateTargetLocation(L.latLng(tree.lat, tree.lng));
+                map.panTo([tree.lat, tree.lng]);
+            } else {
+                document.getElementById('geo-lat').value = '';
+                document.getElementById('geo-lng').value = '';
+            }
+        }
+
+        function updateTargetLocation(latlng) {
+            selectedLatLng = latlng;
+            document.getElementById('geo-lat').value = latlng.lat.toFixed(6);
+            document.getElementById('geo-lng').value = latlng.lng.toFixed(6);
+            
+            if(document.getElementById('lbl-lat')) {
+                document.getElementById('lbl-lat').innerText = latlng.lat.toFixed(6);
+                document.getElementById('lbl-lng').innerText = latlng.lng.toFixed(6);
+            }
+        }
+
+        function previewImage(input, prevId) {
+            let prev = document.getElementById(prevId);
+            if (input.files && input.files[0]) {
+                let r = new FileReader();
+                r.onload = e => { 
+                    prev.src = e.target.result; 
+                    prev.style.display = 'block'; 
+                };
+                r.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function resetUploadForm() {
+            document.getElementById('img1').value = ''; 
+            document.getElementById('img2').value = '';
+            document.getElementById('prev1').style.display = 'none'; 
+            document.getElementById('prev2').style.display = 'none';
+            
+            const log = document.getElementById('status-log');
+            log.innerText = '';
+            log.style.display = 'none';
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                if (!file) resolve("");
+                let r = new FileReader();
+                r.readAsDataURL(file);
+                r.onload = () => resolve(r.result.split(',')[1]);
+                r.onerror = e => reject(e);
+            });
+        }
+
+        async function submitDataViaAjax() {
+            if (!selectedTree || !selectedLatLng) { 
+                alert('Vui lòng chọn thông tin cây và ghim tọa độ mong muốn trên bản đồ trước.'); 
+                return; 
+            }
+            
+            const log = document.getElementById('status-log');
+            const btn = document.getElementById('btn-submit');
+            
+            log.style.display = 'block';
+            log.style.backgroundColor = '#fff3e0';
+            log.style.color = '#e65100';
+            log.innerText = '⏳ Đang xử lý ảnh & đẩy dữ liệu lên Google Sheets...';
+            btn.disabled = true;
+
+            try {
+                let img1 = document.getElementById('img1').files[0];
+                let img2 = document.getElementById('img2').files[0];
+                let b1 = img1 ? await fileToBase64(img1) : "";
+                let b2 = img2 ? await fileToBase64(img2) : "";
+
+                let payload = {
+                    stt: String(selectedTree.stt),
+                    phuong: selectedTree.phuong,
+                    duong: selectedTree.duong,
+                    loaicay: selectedTree.loaicay,
+                    socay: selectedTree.socay,
+                    lat: selectedLatLng.lat.toFixed(6),
+                    lng: selectedLatLng.lng.toFixed(6),
+                    image1_name: img1 ? img1.name : "",
+                    image1_data: b1,
+                    image2_name: img2 ? img2.name : "",
+                    image2_data: b2
+                };
+
+                fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                .then(() => {
+                    log.style.backgroundColor = '#e8f5e9';
+                    log.style.color = '#2e7d32';
+                    log.innerHTML = '🎉 ĐÃ GỬI LỆNH CẬP NHẬT THÀNH CÔNG!';
+                    btn.disabled = false;
+                    
+                    // Cập nhật lại mảng dữ liệu tạm thời để giao diện hiển thị ngay lập tức không cần đợi kéo lại toàn bộ dữ liệu lớn
+                    selectedTree.lat = selectedLatLng.lat;
+                    selectedTree.lng = selectedLatLng.lng;
+                    
+                    setTimeout(() => {
+                        fetchCSVData(); // Đồng bộ lại từ nguồn
+                    }, 1500);
+                })
+                .catch((err) => {
+                    log.style.backgroundColor = '#ffebee';
+                    log.style.color = '#d32f2f';
+                    log.innerText = '❌ Lỗi kết nối API đường truyền: ' + err.message;
+                    btn.disabled = false;
+                });
+            } catch (e) { 
+                log.style.backgroundColor = '#ffebee';
+                log.style.color = '#d32f2f';
+                log.innerText = '❌ Có lỗi xảy ra trong quá trình xử lý nén chuỗi ảnh Base64.'; 
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
