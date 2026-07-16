@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ thống Quản lý Cây xanh Thông minh v5.1 - Cascading Filter</title>
+    <title>Hệ thống Quản lý Cây xanh Thông minh v5.2 - Field Ready</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -19,7 +19,7 @@
         .toggle-sidebar-btn { position: absolute; top: 10px; left: 10px; z-index: 1000; background: #1b5e20; color: white; border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
         
         .section { padding: 15px; border-bottom: 1px solid #eee; }
-        .section-title { font-size: 13px; font-weight: bold; color: #1b5e20; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; text-transform: uppercase; }
+        .section-title { font-size: 13px; font-weight: bold; color: #1b5e20; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; gap: 6px; text-transform: uppercase; }
         .form-group { margin-bottom: 10px; }
         .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; font-weight: 600; }
         .form-group select, .form-group input { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; outline: none; background-color: #fff; }
@@ -37,6 +37,10 @@
         .btn-use-current-gps { background-color: #ff9800; margin-top: 8px; }
         .btn-use-current-gps:hover { background-color: #f57c00; }
         
+        /* Kiểu dáng nút làm mới nhanh */
+        .btn-reset-filter { background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .btn-reset-filter:hover { background: #cbd5e1; color: #1e293b; }
+        
         .tree-details { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px; font-size: 12px; }
         .tree-details table { width: 100%; border-collapse: collapse; }
         .tree-details td { padding: 5px 0; border-bottom: 1px solid #f1f1f1; }
@@ -50,7 +54,7 @@
         .preview-img { width: 100%; height: 75px; object-fit: cover; border-radius: 4px; display: none; margin-top: 6px; border: 1px solid #e2e8f0; }
         
         .status-msg { margin-top: 10px; font-size: 12px; text-align: center; font-weight: bold; padding: 8px; border-radius: 4px; display: none; }
-        .offline-badge { background: #ff5722; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-left: auto; display: none; }
+        .offline-badge { background: #ff5722; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
         .queue-badge { background: #ff9800; color: white; padding: 5px; text-align: center; font-size: 11px; font-weight: bold; display: none; cursor: pointer; }
 
         @media(max-width: 768px) {
@@ -66,7 +70,7 @@
 <body>
 
     <header>
-        <h1>HỆ THỐNG ĐỊNH VỊ CÂY XANH THỰC ĐỊA v5.1</h1>
+        <h1>HỆ THỐNG ĐỊNH VỊ CÂY XANH THỰC ĐỊA v5.2</h1>
     </header>
 
     <div id="queue-alert" class="queue-badge" onclick="syncOfflineQueue()">
@@ -84,8 +88,11 @@
             
             <div class="section">
                 <div class="section-title">
-                    🔍 BỘ LỌC TÌM KIẾM CÂY
-                    <span id="network-status" class="offline-badge">OFFLINE</span>
+                    <span>🔍 BỘ LỌC TÌM KIẾM CÂY</span>
+                    <div style="display: flex; gap: 5px; align-items: center;">
+                        <span id="network-status" class="offline-badge" style="display: none;">OFFLINE</span>
+                        <button type="button" class="btn-reset-filter" onclick="resetAllFiltersAndInputs()">🔄 Làm mới</button>
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -258,7 +265,6 @@
             return result;
         }
 
-        // Khởi tạo danh sách Phường ban đầu
         function buildInitialPhuongFilter() {
             const phuongs = [...new Set(allTrees.map(t => t.phuong).filter(Boolean))].sort();
             const pSel = document.getElementById('filter-phuong');
@@ -266,7 +272,6 @@
             phuongs.forEach(p => pSel.add(new Option(p, p)));
         }
 
-        // LOGIC LỌC PHÂN CẤP THEO ĐÚNG YÊU CẦU GOM GỌN
         function setupCascadingFilters() {
             const pSel = document.getElementById('filter-phuong');
             const dSel = document.getElementById('filter-duong');
@@ -274,7 +279,6 @@
             const sSel = document.getElementById('filter-socay');
             const btnSearch = document.getElementById('btn-trigger-search');
 
-            // Bước 1 Thay đổi (Chọn Phường) -> Cập nhật các Đường thuộc Phường đó
             pSel.addEventListener('change', () => {
                 dSel.innerHTML = '<option value="">-- Chọn Tuyến Đường --</option>';
                 lSel.innerHTML = '<option value="">-- Trước hết hãy chọn Đường --</option>';
@@ -287,13 +291,11 @@
 
                 if (pSel.value) {
                     dSel.disabled = false;
-                    // Lọc ra các đường duy nhất nằm TRONG phường đã chọn
                     let streets = [...new Set(allTrees.filter(t => t.phuong === pSel.value).map(t => t.duong).filter(Boolean))].sort();
                     streets.forEach(d => dSel.add(new Option(d, d)));
                 }
             });
 
-            // Bước 2 Thay đổi (Chọn Đường) -> Kích hoạt nút Tìm Kiếm & Chuẩn bị cập nhật Loài Cây
             dSel.addEventListener('change', () => {
                 lSel.innerHTML = '<option value="">-- Chọn Loài Cây --</option>';
                 sSel.innerHTML = '<option value="">-- Trước hết hãy chọn Loài cây --</option>';
@@ -302,10 +304,9 @@
                 sSel.disabled = true;
 
                 if (dSel.value) {
-                    btnSearch.disabled = false; // Mở nút tìm kiếm
+                    btnSearch.disabled = false;
                     lSel.disabled = false;
                     
-                    // Lọc ra các loài cây duy nhất CHỈ CÓ trên tuyến đường của phường này
                     let species = [...new Set(allTrees.filter(t => t.phuong === pSel.value && t.duong === dSel.value).map(t => t.loaicay).filter(Boolean))].sort();
                     species.forEach(l => lSel.add(new Option(l, l)));
                 } else {
@@ -313,24 +314,19 @@
                 }
             });
 
-            // Bước 3 Thay đổi (Chọn Loài Cây) -> Lọc gom gọn chỉ còn danh sách Số Hiệu của loài đó trên tuyến đường đó
             lSel.addEventListener('change', () => {
                 sSel.innerHTML = '<option value="">-- Chọn Số Hiệu Cây --</option>';
                 sSel.disabled = true;
 
                 if (lSel.value) {
                     sSel.disabled = false;
-                    // Lọc gom gọn tối đa: Lấy danh sách số hiệu của loài cây cụ thể trên tuyến đường cụ thể
                     let finalTreeNumbers = allTrees.filter(t => t.phuong === pSel.value && t.duong === dSel.value && t.loaicay === lSel.value);
                     
-                    // Sắp xếp số hiệu cây theo thứ tự tăng dần để dễ tìm kiếm thực địa
                     finalTreeNumbers.sort((a, b) => String(a.socay).localeCompare(String(b.socay), undefined, {numeric: true, sensitivity: 'base'}));
-                    
                     finalTreeNumbers.forEach(t => sSel.add(new Option(`Số: ${t.socay}`, t.stt)));
                 }
             });
 
-            // Bước 4 Thay đổi (Chọn Số Hiệu Cây) -> Kích hoạt ngay sự kiện hiển thị thông tin cây xanh đó
             sSel.addEventListener('change', () => { 
                 if (sSel.value) {
                     let target = allTrees.find(t => String(t.stt) === String(sSel.value));
@@ -339,14 +335,52 @@
             });
         }
 
-        // Chức năng khi nhấn nút "Xem các cây trên tuyến này"
+        // CHỨC NĂNG MỚI: LÀM MỚI TOÀN BỘ TRẠNG THÁI ĐỂ THAO TÁC CÂY MỚI NHANH CHÓNG
+        function resetAllFiltersAndInputs() {
+            // 1. Reset các thẻ select về ban đầu
+            document.getElementById('filter-phuong').value = "";
+            
+            const dSel = document.getElementById('filter-duong');
+            dSel.innerHTML = '<option value="">-- Trước hết hãy chọn Phường --</option>';
+            dSel.disabled = true;
+            
+            const lSel = document.getElementById('filter-loai');
+            lSel.innerHTML = '<option value="">-- Trước hết hãy chọn Đường --</option>';
+            lSel.disabled = true;
+            
+            const sSel = document.getElementById('filter-socay');
+            sSel.innerHTML = '<option value="">-- Trước hết hãy chọn Loài cây --</option>';
+            sSel.disabled = true;
+            
+            document.getElementById('btn-trigger-search').disabled = true;
+            
+            // 2. Clear thông tin cây đang chọn
+            selectedTree = null;
+            selectedLatLng = null;
+            document.getElementById('tree-info-container').innerHTML = `
+                <p style="color:#777; text-align:center;">Vui lòng chọn cây từ bộ lọc hoặc click marker trên bản đồ.</p>`;
+            
+            // 3. Ẩn form cập nhật và clear form hình ảnh
+            document.getElementById('update-section').style.display = 'none';
+            resetUploadForm();
+            
+            // 4. Khôi phục hiển thị toàn bộ marker và đưa bản đồ về mặc định hoặc vị trí GPS nếu có
+            renderMarkers(allTrees);
+            document.getElementById('gps-status').innerText = '';
+            
+            if (userMarker) {
+                map.flyTo(userMarker.getLatLng(), 16);
+            } else {
+                map.setView([10.762622, 106.660172], 13);
+            }
+        }
+
         function applyFiltersAndFocus() {
             const p = document.getElementById('filter-phuong').value;
             const d = document.getElementById('filter-duong').value;
             
             if(!p || !d) return;
 
-            // Chỉ hiển thị các marker thuộc tuyến đường và phường này lên bản đồ
             let filtered = allTrees.filter(t => t.phuong === p && t.duong === d);
             renderMarkers(filtered);
         }
@@ -401,7 +435,6 @@
                     }
                 });
 
-                // Khớp nối thông minh với bộ lọc phân cấp khi định vị thành công
                 if (closestTree && minDistance < 0.01) {
                     document.getElementById('gps-status').innerHTML = `🎯 Khớp tuyến: <b>${closestTree.duong}</b> (Sai số: ${accuracy.toFixed(0)}m)`;
                     
@@ -413,7 +446,6 @@
                     dSel.value = closestTree.duong;
                     dSel.dispatchEvent(new Event('change'));
                     
-                    // Tự động quét hiển thị marker các cây trên tuyến này luôn
                     applyFiltersAndFocus();
                 } else {
                     document.getElementById('gps-status').innerText = `Đã lấy GPS (${accuracy.toFixed(0)}m). Không thấy tuyến cây mẫu kề cận.`;
