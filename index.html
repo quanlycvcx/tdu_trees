@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ thống Quản lý Cây xanh Thông minh v5.2 - Field Ready</title>
+    <title>Hệ thống Quản lý Cây xanh Thông minh v5.3 - Mobile Stable</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -37,7 +37,6 @@
         .btn-use-current-gps { background-color: #ff9800; margin-top: 8px; }
         .btn-use-current-gps:hover { background-color: #f57c00; }
         
-        /* Kiểu dáng nút làm mới nhanh */
         .btn-reset-filter { background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
         .btn-reset-filter:hover { background: #cbd5e1; color: #1e293b; }
         
@@ -70,7 +69,7 @@
 <body>
 
     <header>
-        <h1>HỆ THỐNG ĐỊNH VỊ CÂY XANH THỰC ĐỊA v5.2</h1>
+        <h1>HỆ THỐNG ĐỊNH VỊ CÂY XANH THỰC ĐỊA v5.3</h1>
     </header>
 
     <div id="queue-alert" class="queue-badge" onclick="syncOfflineQueue()">
@@ -216,33 +215,55 @@
             document.getElementById('app-sidebar').classList.toggle('collapsed');
         }
 
+        // Tối ưu hóa fetch dữ liệu trên Mobile để tránh lỗi chặn kết nối kết hợp kết nối Cache
         function fetchCSVData() {
-            fetch(CSV_URL)
+            // Thêm tham số chống lưu cache trình duyệt cũ trên di động cache-bust `&_=`
+            const finalUrl = CSV_URL + '&_=' + new Date().getTime();
+
+            fetch(finalUrl, { method: 'GET', credentials: 'omit' })
                 .then(res => {
-                    if(!res.ok) throw new Error("Không thể tải tệp dữ liệu.");
+                    if(!res.ok) throw new Error("Mạng di động chặn tải file dữ liệu.");
                     return res.text();
                 })
                 .then(text => {
-                    allTrees = parseCSV(text);
-                    localStorage.setItem('cached_trees_data', text);
-                    buildInitialPhuongFilter();
-                    renderMarkers(allTrees);
+                    processFetchedData(text);
                 })
                 .catch(err => {
-                    const cachedText = localStorage.getItem('cached_trees_data');
-                    if(cachedText) {
-                        allTrees = parseCSV(cachedText);
-                        buildInitialPhuongFilter();
-                        renderMarkers(allTrees);
-                        console.log("Offline mode: Đang dùng dữ liệu cache.");
-                    } else {
-                        alert('Không có kết nối mạng và không có dữ liệu lưu sẵn.');
-                    }
+                    console.warn("Thử nghiệm phương thức tải phụ thông qua Fetch dự phòng trên thiết bị di động...");
+                    // Phương án phụ: Vẫn thử tải bình thường phòng trường hợp cấu hình mạng chập chờn
+                    fetch(CSV_URL)
+                        .then(r => r.text())
+                        .then(t => processFetchedData(t))
+                        .catch(e => useLocalStorageCache());
                 });
         }
 
+        function processFetchedData(text) {
+            if(!text || text.trim().length === 0) {
+                useLocalStorageCache();
+                return;
+            }
+            allTrees = parseCSV(text);
+            localStorage.setItem('cached_trees_data', text); 
+            buildInitialPhuongFilter();
+            renderMarkers(allTrees);
+        }
+
+        function useLocalStorageCache() {
+            const cachedText = localStorage.getItem('cached_trees_data');
+            if(cachedText) {
+                allTrees = parseCSV(cachedText);
+                buildInitialPhuongFilter();
+                renderMarkers(allTrees);
+                console.log("Mobile Offline Mode: Đã khôi phục dữ liệu gốc từ bộ nhớ thiết bị di động.");
+            } else {
+                alert('Không thể kết nối với dữ liệu gốc Google Sheet. Vui lòng kiểm tra lại cấu hình mạng 3G/4G của thiết bị!');
+            }
+        }
+
+        // Sửa lỗi ngắt chuỗi dòng giúp xử lý mảng an toàn tuyệt đối trên iOS và Android
         function parseCSV(text) {
-            let lines = text.split(/\r?\n/), result = [];
+            let lines = text.split(/\r\n|\n|\r/), result = [];
             for (let i = 1; i < lines.length; i++) {
                 let rowText = lines[i].trim();
                 if (!rowText) continue;
@@ -335,9 +356,7 @@
             });
         }
 
-        // CHỨC NĂNG MỚI: LÀM MỚI TOÀN BỘ TRẠNG THÁI ĐỂ THAO TÁC CÂY MỚI NHANH CHÓNG
         function resetAllFiltersAndInputs() {
-            // 1. Reset các thẻ select về ban đầu
             document.getElementById('filter-phuong').value = "";
             
             const dSel = document.getElementById('filter-duong');
@@ -354,17 +373,14 @@
             
             document.getElementById('btn-trigger-search').disabled = true;
             
-            // 2. Clear thông tin cây đang chọn
             selectedTree = null;
             selectedLatLng = null;
             document.getElementById('tree-info-container').innerHTML = `
                 <p style="color:#777; text-align:center;">Vui lòng chọn cây từ bộ lọc hoặc click marker trên bản đồ.</p>`;
             
-            // 3. Ẩn form cập nhật và clear form hình ảnh
             document.getElementById('update-section').style.display = 'none';
             resetUploadForm();
             
-            // 4. Khôi phục hiển thị toàn bộ marker và đưa bản đồ về mặc định hoặc vị trí GPS nếu có
             renderMarkers(allTrees);
             document.getElementById('gps-status').innerText = '';
             
