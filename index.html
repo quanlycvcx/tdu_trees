@@ -3,62 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ thống Quản lý Cây xanh Thông minh v4.2</title>
+    <title>Hệ thống Quản lý Cây xanh Thông minh v5.0 - Field Edition</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #f4f6f9; color: #333; display: flex; flex-direction: column; height: 100vh; }
-        header { background-color: #1b5e20; color: white; padding: 15px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-        header h1 { font-size: 20px; letter-spacing: 0.5px; }
-        .main-container { display: flex; flex: 1; overflow: hidden; }
-        .sidebar { width: 380px; background: white; display: flex; flex-direction: column; overflow-y: auto; border-right: 1px solid #e0e0e0; }
+        header { background-color: #1b5e20; color: white; padding: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative; z-index: 1000; }
+        header h1 { font-size: 16px; letter-spacing: 0.5px; }
+        
+        .main-container { display: flex; flex: 1; overflow: hidden; position: relative; }
+        .sidebar { width: 380px; background: white; display: flex; flex-direction: column; overflow-y: auto; border-right: 1px solid #e0e0e0; transition: transform 0.3s ease; z-index: 999; }
         .map-container { flex: 1; position: relative; }
         #map { width: 100%; height: 100%; }
-        .section { padding: 18px; border-bottom: 1px solid #eee; }
-        .section-title { font-size: 14px; font-weight: bold; color: #1b5e20; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
-        .form-group { margin-bottom: 12px; }
-        .form-group label { display: block; font-size: 13px; margin-bottom: 5px; color: #555; font-weight: 600; }
-        .form-group select, .form-group input { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; outline: none; transition: all 0.2s; }
-        .form-group select:focus, .form-group input:focus { border-color: #1b5e20; box-shadow: 0 0 0 2px rgba(27,94,32,0.1); }
-        .btn { background-color: #2e7d32; color: white; border: none; padding: 12px; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; text-align: center; transition: background 0.2s; }
+        
+        /* Nút ẩn hiện sidebar trên mobile */
+        .toggle-sidebar-btn { position: absolute; top: 10px; left: 10px; z-index: 1000; background: #1b5e20; color: white; border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        
+        .section { padding: 15px; border-bottom: 1px solid #eee; }
+        .section-title { font-size: 13px; font-weight: bold; color: #1b5e20; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; text-transform: uppercase; }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #555; font-weight: 600; }
+        .form-group select, .form-group input { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; outline: none; }
+        .form-group select:focus, .form-group input:focus { border-color: #1b5e20; }
+        
+        .btn { background-color: #2e7d32; color: white; border: none; padding: 12px; font-size: 13px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; text-align: center; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
         .btn:hover { background-color: #1b5e20; }
         .btn:disabled { background-color: #a5d6a7; cursor: not-allowed; }
-        .btn-gps { background-color: #0288d1; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        
+        .btn-gps { background-color: #0288d1; margin-bottom: 6px; }
         .btn-gps:hover { background-color: #01579b; }
-        .tree-details { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; font-size: 13px; }
+        .btn-use-current-gps { background-color: #ff9800; margin-top: 8px; }
+        .btn-use-current-gps:hover { background-color: #f57c00; }
+        
+        .tree-details { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px; font-size: 12px; }
         .tree-details table { width: 100%; border-collapse: collapse; }
-        .tree-details td { padding: 6px 0; border-bottom: 1px solid #f1f1f1; vertical-align: top; }
+        .tree-details td { padding: 5px 0; border-bottom: 1px solid #f1f1f1; }
         .tree-details tr:last-child td { border-bottom: none; }
-        .tree-details td:first-child { font-weight: 600; color: #666; width: 40%; }
-        .image-upload-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .upload-item { border: 2px dashed #cbd5e1; border-radius: 6px; padding: 12px; text-align: center; background: #f8fafc; cursor: pointer; position: relative; display: block; font-size: 13px; font-weight: 500; color: #64748b; }
+        .tree-details td:first-child { font-weight: 600; color: #666; width: 45%; }
+        
+        .image-upload-box { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .upload-item { border: 2px dashed #cbd5e1; border-radius: 6px; padding: 10px; text-align: center; background: #f8fafc; cursor: pointer; display: block; font-size: 12px; font-weight: 500; color: #64748b; }
         .upload-item:hover { border-color: #2e7d32; background: #f0fdf4; color: #2e7d32; }
         .upload-item input[type="file"] { display: none; }
-        .preview-img { width: 100%; height: 85px; object-fit: cover; border-radius: 4px; display: none; margin-top: 8px; border: 1px solid #e2e8f0; }
-        .status-msg { margin-top: 10px; font-size: 13px; text-align: center; font-weight: bold; padding: 8px; border-radius: 4px; display: none; }
+        .preview-img { width: 100%; height: 75px; object-fit: cover; border-radius: 4px; display: none; margin-top: 6px; border: 1px solid #e2e8f0; }
         
+        .status-msg { margin-top: 10px; font-size: 12px; text-align: center; font-weight: bold; padding: 8px; border-radius: 4px; display: none; }
+        .offline-badge { background: #ff5722; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-left: auto; display: none; }
+        .queue-badge { background: #ff9800; color: white; padding: 5px; text-align: center; font-size: 11px; font-weight: bold; display: none; cursor: pointer; }
+
         @media(max-width: 768px) {
-            .main-container { flex-direction: column; }
-            .sidebar { width: 100%; height: 50vh; }
-            .map-container { height: 50vh; }
+            header h1 { font-size: 14px; }
+            .toggle-sidebar-btn { display: block; }
+            .main-container { flex-direction: column-reverse; }
+            .sidebar { width: 100%; height: 60vh; border-right: none; border-top: 1px solid #e0e0e0; }
+            .sidebar.collapsed { transform: translateY(100%); height: 0; overflow: hidden; }
+            .map-container { flex: 1; height: 100%; }
         }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>HỆ THỐNG ĐỊNH VỊ CÂY XANH TỰ ĐỘNG NHẬN DIỆN TUYẾN ĐƯỜNG</h1>
+        <h1>HỆ THỐNG ĐỊNH VỊ CÂY XANH THỰC ĐỊA v5.0</h1>
     </header>
 
+    <div id="queue-alert" class="queue-badge" onclick="syncOfflineQueue()">
+        ⚠️ Bạn có dữ liệu ngoại tuyến chưa đồng bộ. Nhấp vào đây để thử gửi lại!
+    </div>
+
     <div class="main-container">
-        <div class="sidebar">
+        <button class="toggle-sidebar-btn" onclick="toggleSidebar()">☰ Ẩn/Hiện Form</button>
+        
+        <div class="sidebar" id="app-sidebar">
             <div class="section">
-                <button class="btn btn-gps" onclick="locateUserAndAutoFill()">🎯 TÌM PHƯỜNG & ĐƯỜNG GẦN ĐÂY NHẤT</button>
-                <div id="gps-status" style="font-size: 12px; color: #666; text-align: center; margin-top: 6px; font-weight: 500;"></div>
+                <button class="btn btn-gps" onclick="locateUserAndAutoFill()">🎯 TÌM TUYẾN GẦN ĐÂY NHẤT (GPS)</button>
+                <div id="gps-status" style="font-size: 11px; color: #666; text-align: center; margin-top: 4px; font-weight: 500;"></div>
             </div>
             
             <div class="section">
-                <div class="section-title">🔍 BỘ LỌC TÌM KIẾM CÂY XANH</div>
+                <div class="section-title">
+                    🔍 BỘ LỌC TÌM KIẾM CÂY
+                    <span id="network-status" class="offline-badge">OFFLINE</span>
+                </div>
                 <div class="form-group">
                     <label for="filter-phuong">Phường/Xã</label>
                     <select id="filter-phuong"><option value="">-- Tất cả Phường --</option></select>
@@ -88,26 +114,30 @@
                 <div class="section-title">📍 CẬP NHẬT TỌA ĐỘ & HÌNH ẢNH</div>
                 
                 <div class="form-group">
-                    <label>coordX (Vĩ độ Lat từ bản đồ)</label>
+                    <label>coordX (Vĩ độ Lat)</label>
                     <input type="text" id="geo-lat" readonly style="background-color: #f1f5f9; color: #334155;">
                 </div>
                 
                 <div class="form-group">
-                    <label>coordY (Kinh độ Lng từ bản đồ)</label>
+                    <label>coordY (Kinh độ Lng)</label>
                     <input type="text" id="geo-lng" readonly style="background-color: #f1f5f9; color: #334155;">
                 </div>
 
-                <div class="form-group">
-                    <label>Upload Hình Ảnh Cây</label>
+                <button type="button" class="btn btn-use-current-gps" id="btn-snap-gps" onclick="snapToCurrentGPS()">
+                    📍 LẤY VỊ TRÍ GPS HIỆN TẠI CỦA TÔI GÁN CHO CÂY
+                </button>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label>Chụp/Upload Hình Ảnh Cây</label>
                     <div class="image-upload-box">
                         <label class="upload-item">
-                            📷 Chọn Ảnh 1
-                            <input type="file" id="img1" accept="image/*" onchange="previewImage(this, 'prev1')">
+                            📷 Chụp Ảnh 1
+                            <input type="file" id="img1" accept="image/*" capture="camera" onchange="previewImage(this, 'prev1')">
                             <img id="prev1" class="preview-img">
                         </label>
                         <label class="upload-item">
-                            📷 Chọn Ảnh 2
-                            <input type="file" id="img2" accept="image/*" onchange="previewImage(this, 'prev2')">
+                            📷 Chụp Ảnh 2
+                            <input type="file" id="img2" accept="image/*" capture="camera" onchange="previewImage(this, 'prev2')">
                             <img id="prev2" class="preview-img">
                         </label>
                     </div>
@@ -125,14 +155,13 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Đồng bộ hóa URL đúng cấu trúc xuất bản CSV của bạn
         const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQs5Vgwh6HtVFXhGGHS1_rCLQwGLKG2wwHW_B6oMwEs6gYBD76cAWGUhsT27hfsBH6LKhwIIw5ts7c5/pub?gid=1597817292&single=true&output=csv';
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycby5q4tmkJmmfYP1xZQfVWBJWjTUBF0Ezr-Cel-uCypiidakPK-jiLGW6ylUmxPcLE1M7w/exec';
 
-        let map, markersLayer, allTrees = [], selectedTree = null, selectedLatLng = null, userMarker = null;
+        let map, markersLayer, allTrees = [], selectedTree = null, selectedLatLng = null;
+        let userMarker = null, userAccuracyCircle = null, currentDeviceLatLng = null;
 
         window.addEventListener('DOMContentLoaded', () => {
-            // Khởi tạo bản đồ mặc định tại khu vực TP.HCM
             map = L.map('map').setView([10.762622, 106.660172], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors'
@@ -141,15 +170,37 @@
 
             map.on('click', (e) => {
                 if (!selectedTree) { 
-                    alert('Vui lòng chọn một cây từ danh sách bộ lọc hoặc click vào marker trước khi chọn vị trí trên bản đồ!'); 
+                    alert('Vui lòng chọn một cây từ danh sách bộ lọc hoặc click vào bản đồ sau khi chọn cây!'); 
                     return; 
                 }
                 updateTargetLocation(e.latlng);
             });
 
+            initNetworkMonitoring();
+            checkOfflineQueueBadge();
             fetchCSVData();
             setupFilterEvents();
         });
+
+        // Tự động kiểm tra Trạng thái kết nối internet thực địa
+        function initNetworkMonitoring() {
+            const updateStatus = () => {
+                const badge = document.getElementById('network-status');
+                if (navigator.onLine) {
+                    badge.style.display = 'none';
+                    syncOfflineQueue(); // Tự động đồng bộ lại khi có mạng
+                } else {
+                    badge.style.display = 'inline-block';
+                }
+            };
+            window.addEventListener('online', updateStatus);
+            window.addEventListener('offline', updateStatus);
+            updateStatus();
+        }
+
+        function toggleSidebar() {
+            document.getElementById('app-sidebar').classList.toggle('collapsed');
+        }
 
         function fetchCSVData() {
             fetch(CSV_URL)
@@ -159,10 +210,22 @@
                 })
                 .then(text => {
                     allTrees = parseCSV(text);
+                    localStorage.setItem('cached_trees_data', text); // Cache dữ liệu chạy offline thực địa
                     populateFilters(allTrees);
                     renderMarkers(allTrees);
                 })
-                .catch(err => alert('Không thể kết nối hoặc đọc dữ liệu từ Google Sheet công khai. Vui lòng kiểm tra lại nút trích xuất công bố.'));
+                .catch(err => {
+                    // Nếu lỗi mạng thực địa, đọc từ cache đã lưu trước đó
+                    const cachedText = localStorage.getItem('cached_trees_data');
+                    if(cachedText) {
+                        allTrees = parseCSV(cachedText);
+                        populateFilters(allTrees);
+                        renderMarkers(allTrees);
+                        console.log("Đang hiển thị dữ liệu đã lưu trong bộ nhớ tạm (Offline mode).");
+                    } else {
+                        alert('Không thể kết nối mạng và không có dữ liệu lưu trữ tạm thời.');
+                    }
+                });
         }
 
         function parseCSV(text) {
@@ -171,7 +234,6 @@
                 let rowText = lines[i].trim();
                 if (!rowText) continue;
                 
-                // Cắt chuỗi thông minh xử lý dấu phẩy nằm trong ngoặc kép
                 let c = rowText.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
                 if(c.length < 12) continue; 
                 
@@ -235,9 +297,7 @@
             });
 
             lSel.addEventListener('change', () => {
-                if (pSel.value && dSel.value) {
-                    updateTreeNumberOptions();
-                }
+                if (pSel.value && dSel.value) updateTreeNumberOptions();
                 applyFilters();
             });
 
@@ -293,24 +353,28 @@
 
         function locateUserAndAutoFill() {
             if (!navigator.geolocation) { 
-                alert('Trình duyệt của bạn không hỗ trợ định vị GPS.'); 
+                alert('Trình duyệt không hỗ trợ định vị GPS.'); 
                 return; 
             }
-            document.getElementById('gps-status').innerText = '⏳ Đang định vị tọa độ GPS của bạn...';
+            document.getElementById('gps-status').innerText = '⏳ Đang đồng bộ vệ tinh GPS thực địa...';
 
             navigator.geolocation.getCurrentPosition((pos) => {
                 let uLat = pos.coords.latitude, uLng = pos.coords.longitude;
+                let accuracy = pos.coords.accuracy;
+                currentDeviceLatLng = L.latLng(uLat, uLng);
                 
+                // Hiển thị vòng tròn sai số độ chính xác thực địa
                 if (userMarker) map.removeLayer(userMarker);
-                userMarker = L.circleMarker([uLat, uLng], { 
-                    radius: 9, 
-                    fillColor: '#007aff', 
-                    color: '#fff', 
-                    weight: 3, 
-                    fillOpacity: 0.8 
-                }).addTo(map);
+                if (userAccuracyCircle) map.removeLayer(userAccuracyCircle);
+
+                userAccuracyCircle = L.circle([uLat, uLng], { radius: accuracy, color: '#0288d1', weight: 1, fillOpacity: 0.15 }).addTo(map);
+                userMarker = L.circleMarker([uLat, uLng], { radius: 8, fillColor: '#007aff', color: '#fff', weight: 2, fillOpacity: 0.9 }).addTo(map);
                 
                 map.flyTo([uLat, uLng], 18);
+
+                if (accuracy > 25) {
+                    document.getElementById('gps-status').innerHTML = `⚠️ GPS sai số lớn (${accuracy.toFixed(0)}m). Hãy đợi vài giây hoặc đứng góc thoáng.`;
+                }
 
                 let minDistance = Infinity, closestTree = null;
                 allTrees.forEach(tree => {
@@ -320,9 +384,8 @@
                     }
                 });
 
-                // Tăng độ chuẩn xác quét bán kính lân cận tự động
                 if (closestTree && minDistance < 0.01) {
-                    document.getElementById('gps-status').innerHTML = `🎯 Tuyến gần nhất: <b>${closestTree.duong}, ${closestTree.phuong}</b>`;
+                    document.getElementById('gps-status').innerHTML = `🎯 Gần tuyến: <b>${closestTree.duong}</b> (Độ chính xác: ${accuracy.toFixed(0)}m)`;
                     
                     const pSel = document.getElementById('filter-phuong');
                     pSel.value = closestTree.phuong;
@@ -332,12 +395,22 @@
                     dSel.value = closestTree.duong;
                     dSel.dispatchEvent(new Event('change'));
                 } else {
-                    document.getElementById('gps-status').innerText = '🎯 Đã xác định vị trí! Không tìm thấy dữ liệu cây nào trong phạm vi gần.';
+                    document.getElementById('gps-status').innerText = `Đã tìm thấy GPS (${accuracy.toFixed(0)}m). Không có cây mẫu trong bán kính gần.`;
                 }
             }, () => {
-                alert('Lỗi định vị. Vui lòng bật vị trí thiết bị và chạy website dưới giao thức bảo mật HTTPS.');
-                document.getElementById('gps-status').innerText = '❌ Không thể truy cập GPS.';
-            }, { enableHighAccuracy: true, timeout: 8000 });
+                alert('Lỗi lấy GPS. Hãy bật Vị trí (Location) trên điện thoại.');
+                document.getElementById('gps-status').innerText = '❌ Lỗi kết nối GPS.';
+            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+        }
+
+        // Chức năng mới: Gán nhanh tọa độ thực tế của người đứng cho cây xanh đang chọn
+        function snapToCurrentGPS() {
+            if(!currentDeviceLatLng) {
+                alert("Vui lòng ấn nút 'TÌM TUYẾN GẦN ĐÂY NHẤT (GPS)' ở phía trên để thiết bị cập nhật vệ tinh trước.");
+                return;
+            }
+            updateTargetLocation(currentDeviceLatLng);
+            map.panTo(currentDeviceLatLng);
         }
 
         function selectTree(tree) {
@@ -362,6 +435,11 @@
             } else {
                 document.getElementById('geo-lat').value = '';
                 document.getElementById('geo-lng').value = '';
+            }
+            
+            // Tự động thu gọn thanh sidebar trên mobile sau khi chọn cây để hiện rõ bản đồ
+            if(window.innerWidth <= 768) {
+                setTimeout(() => toggleSidebar(), 600);
             }
         }
 
@@ -411,7 +489,7 @@
 
         async function submitDataViaAjax() {
             if (!selectedTree || !selectedLatLng) { 
-                alert('Vui lòng chọn thông tin cây và ghim tọa độ mong muốn trên bản đồ trước.'); 
+                alert('Vui lòng chọn thông tin cây và lấy tọa độ trước.'); 
                 return; 
             }
             
@@ -421,7 +499,7 @@
             log.style.display = 'block';
             log.style.backgroundColor = '#fff3e0';
             log.style.color = '#e65100';
-            log.innerText = '⏳ Đang xử lý ảnh & đẩy dữ liệu lên Google Sheets...';
+            log.innerText = '⏳ Đang xử lý đóng gói ảnh...';
             btn.disabled = true;
 
             try {
@@ -444,38 +522,106 @@
                     image2_data: b2
                 };
 
-                fetch(WEB_APP_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                })
-                .then(() => {
-                    log.style.backgroundColor = '#e8f5e9';
-                    log.style.color = '#2e7d32';
-                    log.innerHTML = '🎉 ĐÃ GỬI LỆNH CẬP NHẬT THÀNH CÔNG!';
+                // Kiểm tra trạng thái mạng thực địa
+                if (!navigator.onLine) {
+                    saveToOfflineQueue(payload);
+                    log.style.backgroundColor = '#ffcc80';
+                    log.style.color = '#b56d00';
+                    log.innerHTML = '📂 MẤT MẠNG! Dữ liệu đã đưa vào hàng chờ ngoại tuyến. Hệ thống tự gửi lại khi có 4G.';
                     btn.disabled = false;
-                    
-                    // Cập nhật lại mảng dữ liệu tạm thời để giao diện hiển thị ngay lập tức không cần đợi kéo lại toàn bộ dữ liệu lớn
-                    selectedTree.lat = selectedLatLng.lat;
-                    selectedTree.lng = selectedLatLng.lng;
-                    
-                    setTimeout(() => {
-                        fetchCSVData(); // Đồng bộ lại từ nguồn
-                    }, 1500);
-                })
-                .catch((err) => {
-                    log.style.backgroundColor = '#ffebee';
-                    log.style.color = '#d32f2f';
-                    log.innerText = '❌ Lỗi kết nối API đường truyền: ' + err.message;
-                    btn.disabled = false;
-                });
+                    return;
+                }
+
+                sendData(payload, log, btn);
+
             } catch (e) { 
                 log.style.backgroundColor = '#ffebee';
                 log.style.color = '#d32f2f';
-                log.innerText = '❌ Có lỗi xảy ra trong quá trình xử lý nén chuỗi ảnh Base64.'; 
+                log.innerText = '❌ Lỗi nén chuỗi ảnh xử lý thực địa.'; 
                 btn.disabled = false;
             }
+        }
+
+        function sendData(payload, logElement, buttonElement) {
+            logElement.innerText = '🚀 Đang tải dữ liệu thực địa lên Google Sheets...';
+            
+            fetch(WEB_APP_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                logElement.style.backgroundColor = '#e8f5e9';
+                logElement.style.color = '#2e7d32';
+                logElement.innerHTML = '🎉 CẬP NHẬT THÀNH CÔNG LÊN HỆ THỐNG!';
+                buttonElement.disabled = false;
+                
+                selectedTree.lat = parseFloat(payload.lat);
+                selectedTree.lng = parseFloat(payload.lng);
+                
+                setTimeout(() => fetchCSVData(), 2000);
+            })
+            .catch((err) => {
+                saveToOfflineQueue(payload); // Nếu fetch lỗi mạng bất ngờ, đưa vào queue
+                logElement.style.backgroundColor = '#ffcc80';
+                logElement.style.color = '#b56d00';
+                logElement.innerText = '⚠️ Đường truyền lỗi. Đã sao lưu dữ liệu vào hàng chờ ngoại tuyến.';
+                buttonElement.disabled = false;
+            });
+        }
+
+        // Quản lý hàng chờ Ngoại tuyến (Offline Queue) bằng LocalStorage
+        function saveToOfflineQueue(data) {
+            let queue = JSON.parse(localStorage.getItem('offline_tree_queue')) || [];
+            // Kiểm tra trùng, nếu trùng mã cây thì ghi đè bản mới nhất
+            queue = queue.filter(item => item.stt !== data.stt);
+            queue.push(data);
+            localStorage.setItem('offline_tree_queue', JSON.stringify(queue));
+            checkOfflineQueueBadge();
+        }
+
+        function checkOfflineQueueBadge() {
+            let queue = JSON.parse(localStorage.getItem('offline_tree_queue')) || [];
+            const alertBox = document.getElementById('queue-alert');
+            if(queue.length > 0) {
+                alertBox.style.display = 'block';
+                alertBox.innerText = `⚠️ Có ${queue.length} cây đã lưu offline. Nhấp vào đây để gửi lên Google Sheet ngay!`;
+            } else {
+                alertBox.style.display = 'none';
+            }
+        }
+
+        function syncOfflineQueue() {
+            if (!navigator.onLine) return;
+            let queue = JSON.parse(localStorage.getItem('offline_tree_queue')) || [];
+            if (queue.length === 0) return;
+
+            console.log("Đang tiến hành đồng bộ gói dữ liệu offline...");
+            
+            // Xử lý gửi tuần tự tránh nghẽn Apps Script
+            let item = queue.shift();
+            localStorage.setItem('offline_tree_queue', JSON.stringify(queue));
+            checkOfflineQueueBadge();
+
+            fetch(WEB_APP_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(item)
+            }).then(() => {
+                if(queue.length > 0) {
+                    syncOfflineQueue(); // Tiếp tục gửi các cây tiếp theo
+                } else {
+                    alert("Đồng bộ hoàn tất toàn bộ dữ liệu offline thành công!");
+                    fetchCSVData();
+                }
+            }).catch(err => {
+                // Thất bại thì trả lại hàng chờ
+                queue.unshift(item);
+                localStorage.setItem('offline_tree_queue', JSON.stringify(queue));
+                checkOfflineQueueBadge();
+            });
         }
     </script>
 </body>
